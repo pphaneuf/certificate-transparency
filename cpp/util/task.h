@@ -123,6 +123,9 @@ class Task {
   // DONE state further.
   void WhenCancelled(const std::function<void()>& cancel_cb);
 
+  // REQUIRES: !IsDone()
+  void WhenPrepared(const std::function<void()>& prepare_cb);
+
   // Child tasks are owned by this task (the child task will be
   // deleted automatically after their done callback has run). All
   // child tasks will be cancelled automatically if this task is
@@ -180,6 +183,9 @@ class Task {
   // some races.
   std::vector<std::shared_ptr<Task>> child_tasks_;
   std::vector<std::function<void()>> cancel_callbacks_;
+#if 0
+  std::vector<std::function<void()>> prepare_callbacks_;
+#endif
   std::vector<std::function<void()>> cleanup_callbacks_;
 
   DISALLOW_COPY_AND_ASSIGN(Task);

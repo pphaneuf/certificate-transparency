@@ -455,6 +455,19 @@ TYPED_TEST(TaskTest, ChildReturn) {
 }
 
 
+// TODO(pphaneuf): PreparedCallback
+// TODO(pphaneuf): MultiplePreparedCallback
+// TODO(pphaneuf): PreparedCallbackWithHold
+// TODO(pphaneuf): PreparedCallbackReleasingHold
+// TODO(pphaneuf): PreparedCallbackWithCancel
+// TODO(pphaneuf): PreparedCallbackWithCancelCausingReturn
+// TODO(pphaneuf): AddPreparedCallbackDuringPrepare
+// TODO(pphaneuf): AddCancelledCallbackDuringPrepare
+// TODO(pphaneuf): AddPreparedCallbackDuringCancel
+// TODO(pphaneuf): AddPreparedBeforeDone
+// TODO(pphaneuf): WhenPreparedDone
+
+
 }  // namespace
 
 
