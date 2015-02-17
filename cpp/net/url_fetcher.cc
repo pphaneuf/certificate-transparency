@@ -9,6 +9,10 @@
 using cert_trans::internal::ConnectionPool;
 using cert_trans::internal::evhttp_connection_unique_ptr;
 using std::bind;
+using std::chrono::duration;
+using std::chrono::duration_cast;
+using std::chrono::seconds;
+using std::chrono::steady_clock;
 using std::endl;
 using std::make_pair;
 using std::move;
@@ -17,6 +21,9 @@ using std::string;
 using util::Status;
 using util::Task;
 using util::TaskHold;
+
+DEFINE_int32(url_fetcher_default_timeout_seconds, 60,
+             "default timeout for URL fetcher requests");
 
 namespace cert_trans {
 
@@ -74,12 +81,80 @@ struct State {
 };
 
 
+std::ostream& operator<<(std::ostream& output, evhttp_cmd_type cmd) {
+  switch (cmd) {
+#define PRINT_CMD(x) \
+  case x:            \
+    output << #x;    \
+    break
+    PRINT_CMD(EVHTTP_REQ_GET);
+    PRINT_CMD(EVHTTP_REQ_POST);
+    PRINT_CMD(EVHTTP_REQ_HEAD);
+    PRINT_CMD(EVHTTP_REQ_PUT);
+    PRINT_CMD(EVHTTP_REQ_DELETE);
+    PRINT_CMD(EVHTTP_REQ_OPTIONS);
+    PRINT_CMD(EVHTTP_REQ_TRACE);
+    PRINT_CMD(EVHTTP_REQ_CONNECT);
+    PRINT_CMD(EVHTTP_REQ_PATCH);
+#undef PRINT_CMD
+  }
+  return output;
+}
+
+
+void PrintHeaders(std::ostream& output, evkeyvalq* headers) {
+  for (evkeyval* ptr = headers->tqh_first; ptr; ptr = ptr->next.tqe_next) {
+    output << "  " << ptr->key << ": " << ptr->value << std::endl;
+  }
+}
+
+
+std::ostream& operator<<(std::ostream& output, evbuffer& buffer) {
+  const size_t length(evbuffer_get_length(&buffer));
+  output.write(reinterpret_cast<char*>(evbuffer_pullup(&buffer, length)),
+               length);
+  return output;
+}
+
+
+std::ostream& operator<<(std::ostream& output, evhttp_request& req) {
+  output << "command: " << evhttp_request_get_command(&req) << std::endl;
+  // output << ": " << evhttp_request_get_connection(&req) << std::endl;
+  // output << ": " << evhttp_request_get_evhttp_uri(&req) << std::endl;
+  const char* host(evhttp_request_get_host(&req));
+  output << "host: " << (host ? host : "<null>") << std::endl;
+
+  output << "input_buffer: \"" << *evhttp_request_get_input_buffer(&req)
+         << "\"" << std::endl;
+  output << "input_headers {" << std::endl;
+  PrintHeaders(output, evhttp_request_get_input_headers(&req));
+  output << "}" << std::endl;
+
+  output << "output_buffer: \"" << *evhttp_request_get_output_buffer(&req)
+         << "\"" << std::endl;
+  output << "output_headers {" << std::endl;
+  PrintHeaders(output, evhttp_request_get_output_headers(&req));
+  output << "}" << std::endl;
+
+  output << "response_code: " << evhttp_request_get_response_code(&req)
+         << std::endl;
+  output << "uri: " << evhttp_request_get_uri(&req) << std::endl;
+  output << "is_owned: " << evhttp_request_is_owned(&req) << std::endl;
+  return output;
+}
+
+
 void RequestCallback(evhttp_request* req, void* userdata) {
   static_cast<State*>(CHECK_NOTNULL(userdata))->RequestDone(req);
 }
 
 
 UrlFetcher::Request NormaliseRequest(UrlFetcher::Request req) {
+  if (req.deadline.time_since_epoch() == steady_clock::duration::zero()) {
+    req.deadline = steady_clock::now() +
+                   seconds(FLAGS_url_fetcher_default_timeout_seconds);
+  }
+
   if (req.url.Path().empty()) {
     req.url.SetPath("/");
   }
@@ -110,6 +185,17 @@ State::State(ConnectionPool* pool, const UrlFetcher::Request& request,
 
 void State::MakeRequest() {
   CHECK(libevent::Base::OnEventThread());
+  CHECK(!conn_) << "making a request while one is already outstanding?";
+
+  const steady_clock::time_point now(steady_clock::now());
+  const auto deadline_left(request_.deadline - now);
+  if (deadline_left.count() <= 0) {
+    VLOG(1) << "deadline expired: " << duration<float>(deadline_left).count();
+    task_->Return(Status(util::error::DEADLINE_EXCEEDED,
+                         "URL fetch request exceeded deadline"));
+    return;
+  }
+
   evhttp_request* const http_req(
       CHECK_NOTNULL(evhttp_request_new(&RequestCallback, this)));
   for (const auto& header : request_.headers) {
@@ -129,6 +215,10 @@ void State::MakeRequest() {
   }
 
   conn_ = pool_->Get(request_.url);
+
+#if 0
+  evhttp_connection_set_timeout(conn_.get(), ceil(deadline_left.count()));
+#endif
 
   const evhttp_cmd_type verb(VerbToCmdType(request_.verb));
   VLOG(1) << "evhttp_make_request(" << conn_.get() << ", " << http_req << ", "
@@ -150,6 +240,8 @@ void State::RequestDone(evhttp_request* req) {
   CHECK(conn_);
   pool_->Put(move(conn_));
 
+  LOG(INFO) << "RequestDone: " << req;
+
   if (!req) {
     // TODO(pphaneuf): The dreaded null request... These are fairly
     // fatal things, like protocol parse errors, but could also be a
@@ -164,6 +256,7 @@ void State::RequestDone(evhttp_request* req) {
 
   response_->status_code = evhttp_request_get_response_code(req);
   if (response_->status_code < 100) {
+    LOG(INFO) << "evhttp_request:\n" << *req;
     // TODO(pphaneuf): According to my reading of libevent, this is
     // most likely to be a connection refused?
     VLOG(1) << "request has a status code lower than 100: "

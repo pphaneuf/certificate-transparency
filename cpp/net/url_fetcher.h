@@ -41,6 +41,10 @@ class UrlFetcher {
     URL url;
     Headers headers;
     std::string body;
+
+    // This is an absolute deadline, which will hold no matter if the
+    // request is retried or redirects are followed.
+    std::chrono::steady_clock::time_point deadline;
   };
 
   struct Response {
