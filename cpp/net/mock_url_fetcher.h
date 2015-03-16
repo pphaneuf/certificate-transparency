@@ -15,6 +15,30 @@ class MockUrlFetcher : public UrlFetcher {
 };
 
 
+#if 0
+class UrlFetchRequestMatcher
+    : public testing::MatcherInterface<UrlFetcher::Request> {
+ public:
+  UrlFetchRequestMatcher(const testing::Matcher<UrlFetcher::Verb>& verb,
+                         const testing::Matcher<URL>& url,
+                         const testing::Matcher<UrlFetcher::Headers>& headers,
+                         const testing::Matcher<std::string>& body)
+      : verb_(verb), url_(url), headers_(headers), body_(body) {
+  }
+
+  bool MatchAndExplain(UrlFetcher::Request req,
+                       testing::MatchResultListener* listener) const override;
+  void DescribeTo(::std::ostream* os) const override;
+
+ private:
+  const testing::Matcher<UrlFetcher::Verb> verb_;
+  const testing::Matcher<URL>& url_;
+  const testing::Matcher<UrlFetcher::Headers> headers_;
+  const testing::Matcher<std::string> body_;
+};
+#endif
+
+
 inline testing::Matcher<const UrlFetcher::Request&> IsUrlFetchRequest(
     const testing::Matcher<UrlFetcher::Verb>& verb,
     const testing::Matcher<URL>& url,
