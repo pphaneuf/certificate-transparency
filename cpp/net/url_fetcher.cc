@@ -10,6 +10,7 @@ using cert_trans::internal::ConnectionPool;
 using cert_trans::internal::evhttp_connection_unique_ptr;
 using std::bind;
 using std::endl;
+using std::function;
 using std::make_pair;
 using std::move;
 using std::ostream;
@@ -53,18 +54,23 @@ evhttp_cmd_type VerbToCmdType(UrlFetcher::Verb verb) {
 
 
 struct State {
-  State(ConnectionPool* pool, const UrlFetcher::Request& request,
-        UrlFetcher::Response* response, Task* task);
+  State(libevent::Base* base, ConnectionPool* pool,
+        const UrlFetcher::Request& request, UrlFetcher::Response* response,
+        Task* task);
 
   ~State() {
-    CHECK(!conn_) << "request state object still had a connection at cleanup?";
+    if (conn_) {
+      pool_->Put(move(conn_));
+    }
   }
 
   // The following methods must only be called on the libevent
   // dispatch thread.
   void MakeRequest();
   void RequestDone(evhttp_request* req);
+  void CancelRequest(evhttp_request* req);
 
+  libevent::Base* const base_;
   ConnectionPool* const pool_;
   const UrlFetcher::Request request_;
   UrlFetcher::Response* const response_;
@@ -92,9 +98,11 @@ UrlFetcher::Request NormaliseRequest(UrlFetcher::Request req) {
 }
 
 
-State::State(ConnectionPool* pool, const UrlFetcher::Request& request,
+State::State(libevent::Base* base, ConnectionPool* pool,
+             const UrlFetcher::Request& request,
              UrlFetcher::Response* response, Task* task)
-    : pool_(CHECK_NOTNULL(pool)),
+    : base_(CHECK_NOTNULL(base)),
+      pool_(CHECK_NOTNULL(pool)),
       request_(NormaliseRequest(request)),
       response_(CHECK_NOTNULL(response)),
       task_(CHECK_NOTNULL(task)) {
@@ -129,6 +137,9 @@ void State::MakeRequest() {
   }
 
   conn_ = pool_->Get(request_.url);
+  const function<void()> cancel_cb(
+      bind(&State::CancelRequest, this, http_req));
+  task_->WhenCancelled(bind(&libevent::Base::Add, base_, cancel_cb));
 
   const evhttp_cmd_type verb(VerbToCmdType(request_.verb));
   VLOG(1) << "evhttp_make_request(" << conn_.get() << ", " << http_req << ", "
@@ -136,9 +147,6 @@ void State::MakeRequest() {
   if (evhttp_make_request(conn_.get(), http_req, verb,
                           request_.url.PathQuery().c_str()) != 0) {
     VLOG(1) << "evhttp_make_request error";
-    // Put back the connection, RequestDone is not going to get
-    // called.
-    pool_->Put(move(conn_));
     task_->Return(Status(util::error::INTERNAL, "evhttp_make_request error"));
     return;
   }
@@ -190,6 +198,16 @@ void State::RequestDone(evhttp_request* req) {
 }
 
 
+void State::CancelRequest(evhttp_request* req) {
+  CHECK(libevent::Base::OnEventThread());
+
+  if (conn_ && task_->IsActive()) {
+    evhttp_cancel_request(req);
+    task_->Return(Status::CANCELLED);
+  }
+}
+
+
 }  // namespace
 
 
@@ -211,7 +229,7 @@ UrlFetcher::~UrlFetcher() {
 void UrlFetcher::Fetch(const Request& req, Response* resp, Task* task) {
   TaskHold hold(task);
 
-  State* const state(new State(&impl_->pool_, req, resp, task));
+  State* const state(new State(impl_->base_, &impl_->pool_, req, resp, task));
   task->DeleteWhenDone(state);
 
   impl_->base_->Add(bind(&State::MakeRequest, state));
