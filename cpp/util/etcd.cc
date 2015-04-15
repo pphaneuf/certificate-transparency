@@ -5,6 +5,7 @@
 #include <glog/logging.h>
 #include <utility>
 
+#include "monitoring/latency.h"
 #include "util/json_wrapper.h"
 #include "util/libevent_wrapper.h"
 #include "util/statusor.h"
@@ -13,7 +14,9 @@ namespace libevent = cert_trans::libevent;
 
 using std::atoll;
 using std::bind;
+using std::chrono::milliseconds;
 using std::chrono::seconds;
+using std::chrono::steady_clock;
 using std::chrono::system_clock;
 using std::ctime;
 using std::lock_guard;
@@ -60,6 +63,16 @@ const char kKeysSpace[] = "/v2/keys";
 const char kStatsSpace[] = "/v2/stats";
 
 const char kStoreStatsKey[] = "/store";
+
+
+Latency<milliseconds, string> etcd_latency_by_op_ms(
+    "etcd_client_latency_by_op_ms", "operation",
+    "Etcd client latency in ms broken down by operation.");
+
+
+void RecordLatency(const string& op, const steady_clock::time_point& start) {
+  etcd_latency_by_op_ms.RecordLatency(op, steady_clock::now() - start);
+}
 
 
 string MessageFromJsonStatus(const shared_ptr<JsonObject>& json) {
@@ -810,6 +823,7 @@ void EtcdClient::Delete(const string& key, const int64_t current_index,
   params["prevIndex"] = to_string(current_index);
   GenericResponse* const gen_resp(new GenericResponse);
   task->DeleteWhenDone(gen_resp);
+  task->CleanupWhenDone(bind(RecordLatency, "delete", steady_clock::now()));
 
   Generic(key, kKeysSpace, params, UrlFetcher::Verb::DELETE, gen_resp, task);
 }
