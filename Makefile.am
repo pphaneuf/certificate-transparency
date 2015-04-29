@@ -1,5 +1,6 @@
 
 AM_CPPFLAGS = \
+	-I$(srcdir)/cpp \
 	-I$(GMOCK_DIR)/include \
 	-I$(GTEST_DIR)/include \
 	$(json_c_CFLAGS)
@@ -89,11 +90,11 @@ all-local:
 clean-local:
 	$(MAKE) -C python clean
 if HAVE_ANT
-	$(ANT) clean
+	$(ANT) -f $(srcdir)/build.xml clean
 endif
 
 %.pb.h %.pb.cc: %.proto
-	$(AM_V_GEN)protoc $^ --cpp_out=.
+	$(AM_V_GEN)protoc -I$(srcdir) $^ --cpp_out=.
 
 cpp/gtest-all.cc: $(GTEST_DIR)/src/gtest-all.cc
 	$(AM_V_at)cp $^ $@

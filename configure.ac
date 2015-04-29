@@ -158,5 +158,5 @@ AC_CHECK_FUNCS([alarm gettimeofday memset mkdir select socket strdup strerror st
 AM_CONDITIONAL([HAVE_ANT], [test -n "$ANT"])
 AM_CONDITIONAL([HAVE_LDNS], [test -z "$missing_ldns"])
 AC_DEFINE_UNQUOTED([TEST_SRCDIR], ["$srcdir"], [Top of the source directory, for tests.])
-AC_CONFIG_FILES([Makefile])
+AC_CONFIG_FILES([Makefile python/Makefile])
 AC_OUTPUT
