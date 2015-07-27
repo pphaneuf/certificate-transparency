@@ -37,7 +37,8 @@ bin_PROGRAMS = \
 	cpp/server/ct-server \
 	cpp/server/ct-server-v2 \
 	cpp/server/xjson-server \
-	cpp/tools/ct-clustertool
+	cpp/tools/ct-clustertool \
+	cpp/tools/get_hash
 
 noinst_PROGRAMS = \
 	cpp/tools/dump_cert \
@@ -324,6 +325,20 @@ cpp_tools_db_tool_SOURCES = \
 	cpp/util/init.cc \
 	cpp/util/util.cc \
 	cpp/version.cc
+
+cpp_tools_get_hash_LDADD = \
+	cpp/libcore.a \
+	$(json_c_LIBS) \
+	$(libevent_LIBS) \
+	-lprotobuf
+cpp_tools_get_hash_SOURCES = \
+	cpp/client/async_log_client.cc \
+	cpp/tools/get_hash.cc \
+	cpp/proto/serializer.cc \
+	cpp/util/libevent_wrapper.cc \
+	cpp/util/util.cc \
+	cpp/util/json_wrapper.cc \
+	cpp/util/thread_pool.cc
 
 cpp_client_ct_LDADD = \
 	cpp/libcore.a \

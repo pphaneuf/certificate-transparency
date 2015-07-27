@@ -82,6 +82,7 @@
 /cpp/tools/dump_cert
 /cpp/tools/dump_sth
 /cpp/tools/etcd_watch
+/cpp/tools/get_hash
 /cpp/util/bench_etcd
 /cpp/util/bignum_test
 /cpp/util/etcd_delete_test
