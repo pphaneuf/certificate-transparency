@@ -39,6 +39,8 @@
 
 DEFINE_string(ssl_client_trusted_cert_dir, "",
               "Trusted root certificates for the ssl client");
+DEFINE_string(ssl_client_trusted_cert_file, "",
+              "Trusted root certificates for the ssl client");
 DEFINE_string(ct_server_public_key, "",
               "PEM-encoded public key file of the CT log server");
 DEFINE_string(ssl_server, "", "SSL server to connect to");
@@ -564,7 +566,8 @@ static SSLClient::HandshakeResult Connect() {
   CHECK(!FLAGS_ssl_server_port.empty()) << "Must specify --ssl_server_port";
 
   SSLClient client(FLAGS_ssl_server, FLAGS_ssl_server_port,
-                   FLAGS_ssl_client_trusted_cert_dir, verifier);
+                   FLAGS_ssl_client_trusted_cert_dir,
+                   FLAGS_ssl_client_trusted_cert_file, verifier);
 
   SSLClient::HandshakeResult result;
 
