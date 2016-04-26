@@ -3,6 +3,7 @@ package merkletree
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"testing"
@@ -11,6 +12,14 @@ import (
 const (
 	sha256EmptyTreeHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 )
+
+func dh(h string) []byte {
+	r, err := hex.DecodeString(h)
+	if err != nil {
+		panic(err)
+	}
+	return r
+}
 
 func verifierCheck(v *MerkleVerifier, leafIndex, treeSize int64, proof [][]byte, root []byte, data []byte) error {
 	// Verify original inclusion proof
@@ -411,5 +420,76 @@ func TestVerifyConsistencyProof(t *testing.T) {
 				t.Fatalf("Failed to verify known good proof: %s", err)
 			}
 		}
+	}
+}
+func TestCollisionEmptyHashZeroLengthLeaf(t *testing.T) {
+	h := sha256.New()
+
+	digestSize := h.Size()
+
+	// Check that the empty hash is not the same as the hash of an empty leaf.
+	leaf1Digest := h.Sum([]byte{})
+	if got, want := len(leaf1Digest), digestSize; got != want {
+		t.Fatalf("Empty digest has length %d, but expected %d", got, want)
+	}
+
+	leaf2Digest := HashLeaf(h, []byte{})
+	if got, want := len(leaf2Digest), digestSize; got != want {
+		t.Fatalf("Empty leaf digest has length %d, but expected %d", got, want)
+	}
+
+	if bytes.Compare(leaf1Digest, leaf2Digest) == 0 {
+		t.Fatalf("Digests of empty string (%v) and zero-length leaf (%v) should differ", leaf1Digest, leaf2Digest)
+	}
+}
+
+func TestCollisionDifferentLeaves(t *testing.T) {
+	h := sha256.New()
+
+	digestSize := h.Size()
+
+	// Check that different leaves hash to different digests.
+	const leaf1 = "Hello"
+	const leaf2 = "World"
+
+	leaf1Digest := HashLeaf(h, []byte(leaf1))
+	if got, want := len(leaf1Digest), digestSize; got != want {
+		t.Fatalf("Got unexpected leaf1 digest size %d, expected %d", got, want)
+	}
+
+	leaf2Digest := HashLeaf(h, []byte(leaf2))
+	if got, want := len(leaf2Digest), digestSize; got != want {
+		t.Fatalf("Got unexpected leaf2 digest size %d, expected %d", got, want)
+	}
+
+	if bytes.Compare(leaf1Digest, leaf2Digest) == 0 {
+		t.Fatalf("Digests of leaf1 (%v) and leaf2 (%v) should differ", leaf1Digest, leaf2Digest)
+	}
+
+	// Compute an intermediate node digest.
+	node1Digest := HashChildren(h, leaf1Digest, leaf2Digest)
+	if got, want := len(node1Digest), digestSize; got != want {
+		t.Fatalf("Got unexpected intermediate digest size %d, expected %d", got, want)
+	}
+
+	// Check that this is not the same as a leaf hash of their concatenation.
+	image := append(leaf1Digest, leaf2Digest...)
+	node2Digest := HashLeaf(h, image)
+	if got, want := len(node2Digest), digestSize; got != want {
+		t.Fatalf("Got unexpected node2Digest size %d, expected %d", got, want)
+	}
+
+	if bytes.Compare(node1Digest, node2Digest) == 0 {
+		t.Fatalf("node1Digest (%v) and node2Digest (%v) should differ", node1Digest, node2Digest)
+	}
+
+	// Swap the order of nodes and check that the hash is different.
+	node3Digest := HashChildren(h, leaf2Digest, leaf1Digest)
+	if got, want := len(node3Digest), digestSize; got != want {
+		t.Fatalf("Got unexpected node3 digest size %d, expected %d", got, want)
+	}
+
+	if bytes.Compare(node1Digest, node3Digest) == 0 {
+		t.Fatalf("node1Digest (%v) and node3Digest (%v) should differ", node1Digest, node3Digest)
 	}
 }

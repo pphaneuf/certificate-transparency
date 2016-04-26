@@ -7,15 +7,37 @@ import (
 	"hash"
 )
 
+const (
+	// LeafPrefix is the domain separation prefix for leaf hashes.
+	LeafPrefix = 0
+
+	// NodePrefix is the domain separation prefix for internal tree nodes.
+	NodePrefix = 1
+)
+
 // MerkleVerifier is a class which knows how to verify merkle inclusion and consistency proofs.
 type MerkleVerifier struct {
-	treeHasher *TreeHasher
+	hasher hash.Hash
+}
+
+func HashLeaf(h hash.Hash, leaf []byte) []byte {
+	h.Reset()
+	h.Write([]byte{LeafPrefix})
+	return h.Sum(leaf)
+}
+
+// HashChildren returns the merkle hash of the two passed in children.
+func HashChildren(h hash.Hash, left, right []byte) []byte {
+	h.Reset()
+	h.Write([]byte{NodePrefix})
+	h.Write(left)
+	return h.Sum(right)
 }
 
 // NewMerkleVerifier returns a new MerkleVerifier for a tree based on the passed in hasher.
 func NewMerkleVerifier(h hash.Hash) MerkleVerifier {
 	return MerkleVerifier{
-		treeHasher: NewTreeHasher(h),
+		hasher: h,
 	}
 }
 
@@ -45,7 +67,7 @@ func (m MerkleVerifier) RootFromInclusionProof(leafIndex, treeSize int64, proof 
 
 	node := leafIndex - 1
 	lastNode := treeSize - 1
-	nodeHash := m.treeHasher.HashLeaf(data)
+	nodeHash := HashLeaf(m.hasher, data)
 	proofIndex := 0
 
 	for lastNode > 0 {
@@ -53,10 +75,10 @@ func (m MerkleVerifier) RootFromInclusionProof(leafIndex, treeSize int64, proof 
 			return nil, fmt.Errorf("insuficient number of proof components (%d) for treeSize %d", len(proof), treeSize)
 		}
 		if isRightChild(node) {
-			nodeHash = m.treeHasher.HashChildren(proof[proofIndex], nodeHash)
+			nodeHash = HashChildren(m.hasher, proof[proofIndex], nodeHash)
 			proofIndex++
 		} else if node < lastNode {
-			nodeHash = m.treeHasher.HashChildren(nodeHash, proof[proofIndex])
+			nodeHash = HashChildren(m.hasher, nodeHash, proof[proofIndex])
 			proofIndex++
 		} else {
 			// the sibling does not exist and the parent is a dummy copy; do nothing.
@@ -120,12 +142,12 @@ func (m MerkleVerifier) VerifyConsistencyProof(snapshot1, snapshot2 int64, root1
 		}
 
 		if isRightChild(node) {
-			node1Hash = m.treeHasher.HashChildren(proof[proofIndex], node1Hash)
-			node2Hash = m.treeHasher.HashChildren(proof[proofIndex], node2Hash)
+			node1Hash = HashChildren(m.hasher, proof[proofIndex], node1Hash)
+			node2Hash = HashChildren(m.hasher, proof[proofIndex], node2Hash)
 			proofIndex++
 		} else if node < lastNode {
 			// The sibling only exists in the later tree. The parent in the snapshot1 tree is a dummy copy.
-			node2Hash = m.treeHasher.HashChildren(node2Hash, proof[proofIndex])
+			node2Hash = HashChildren(m.hasher, node2Hash, proof[proofIndex])
 		} else {
 			// Else the sibling does not exist in either tree. Do nothing.
 		}
@@ -144,7 +166,7 @@ func (m MerkleVerifier) VerifyConsistencyProof(snapshot1, snapshot2 int64, root1
 			return errors.New("can't verify newer root; insufficient number of proof components")
 		}
 
-		node2Hash = m.treeHasher.HashChildren(node2Hash, proof[proofIndex])
+		node2Hash = HashChildren(m.hasher, node2Hash, proof[proofIndex])
 		proofIndex++
 		lastNode = parent(lastNode)
 	}
