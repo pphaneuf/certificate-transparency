@@ -25,6 +25,7 @@ import org.apache.http.message.BasicNameValuePair;
 import org.certificatetransparency.ctlog.CertificateTransparencyException;
 import org.certificatetransparency.ctlog.ParsedLogEntry;
 import org.certificatetransparency.ctlog.ParsedLogEntryWithProof;
+import org.certificatetransparency.ctlog.SignedCertificateTimestamp;
 import org.certificatetransparency.ctlog.SignedTreeHead;
 import org.certificatetransparency.ctlog.TestData;
 import org.certificatetransparency.ctlog.proto.Ct;
@@ -55,14 +56,14 @@ public class HttpLogClientTest {
       + "JvjFTRdESfKO5428e1HAQL412Sa5e16D4E3M\","
       + "\"sha256_root_hash\":\"jdH9k+\\/lb9abMz3N8rVmwrw8MWU7v55+nSAXej3hqPg=\","
       + "\"tree_size\":4301837}";
-  
+
   public static final String BAD_STH_RESPONSE_INVALID_TIMESTAMP = ""
       + "{\"timestamp\":-1,"
       + "\"tree_head_signature\":\"BAMARzBFAiBX9fHXbK3Yi+P+bGM8mlL8XFmwZ7fkbhK2GqlnoJkMkQIhANGoUuD+"
       + "JvjFTRdESfKO5428e1HAQL412Sa5e16D4E3M\","
       + "\"sha256_root_hash\":\"jdH9k+\\/lb9abMz3N8rVmwrw8MWU7v55+nSAXej3hqPg=\","
       + "\"tree_size\":0}";
-  
+
   public static final String BAD_STH_RESPONSE_INVALID_ROOT_HASH = ""
           + "{\"timestamp\":1402415255382,"
           + "\"tree_head_signature\":\"BAMARzBFAiBX9fHXbK3Yi+P+bGM8mlL8XFmwZ7fkbhK2GqlnoJkMkQIhANGo"
@@ -183,16 +184,16 @@ public class HttpLogClientTest {
     }
   }
 
-  public void verifySCTContents(Ct.SignedCertificateTimestamp sct) {
-    assertEquals(Ct.Version.V1, sct.getVersion());
-    assertArrayEquals(LOG_ID, sct.getId().getKeyId().toByteArray());
-    assertEquals(1373015623951L, sct.getTimestamp());
-    assertEquals(Ct.DigitallySigned.HashAlgorithm.SHA256, sct.getSignature().getHashAlgorithm());
-    assertEquals(Ct.DigitallySigned.SignatureAlgorithm.ECDSA, sct.getSignature().getSigAlgorithm());
+  public void verifySCTContents(SignedCertificateTimestamp sct) {
+    assertEquals(Ct.Version.V1, sct.version);
+    assertArrayEquals(LOG_ID, sct.id.getKeyId().toByteArray());
+    assertEquals(1373015623951L, sct.timestamp);
+    assertEquals(Ct.DigitallySigned.HashAlgorithm.SHA256, sct.signature.getHashAlgorithm());
+    assertEquals(Ct.DigitallySigned.SignatureAlgorithm.ECDSA, sct.signature.getSigAlgorithm());
   }
   @Test
   public void serverResponseParsed() throws IOException {
-    Ct.SignedCertificateTimestamp sct = HttpLogClient.parseServerResponse(JSON_RESPONSE);
+    SignedCertificateTimestamp sct = HttpLogClient.parseServerResponse(JSON_RESPONSE);
     verifySCTContents(sct);
   }
 
@@ -204,7 +205,7 @@ public class HttpLogClientTest {
 
     HttpLogClient client = new HttpLogClient("http://ctlog/", mockInvoker);
     List<Certificate> certs = CryptoDataLoader.certificatesFromFile(new File(TEST_DATA_PATH));
-    Ct.SignedCertificateTimestamp res = client.addCertificate(certs);
+    SignedCertificateTimestamp res = client.addCertificate(certs);
     assertNotNull("Should have a meaningful SCT", res);
 
     verifySCTContents(res);
@@ -239,7 +240,7 @@ public class HttpLogClientTest {
     } catch (CertificateTransparencyException e) {
     }
   }
-  
+
   @Test
   public void getLogSTHBadResponseRootHash() {
     HttpInvoker mockInvoker = mock(HttpInvoker.class);

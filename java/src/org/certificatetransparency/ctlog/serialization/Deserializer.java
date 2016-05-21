@@ -11,6 +11,7 @@ import org.certificatetransparency.ctlog.ParsedLogEntry;
 import org.certificatetransparency.ctlog.ParsedLogEntryWithProof;
 import org.certificatetransparency.ctlog.PreCert;
 import org.certificatetransparency.ctlog.PrecertChainEntry;
+import org.certificatetransparency.ctlog.SignedCertificateTimestamp;
 import org.certificatetransparency.ctlog.SignedEntry;
 import org.certificatetransparency.ctlog.TimestampedEntry;
 import org.certificatetransparency.ctlog.X509ChainEntry;
@@ -32,26 +33,21 @@ public class Deserializer {
    * @return Built CT.SignedCertificateTimestamp
    * @throws SerializationException if the data stream is too short.
    */
-  public static Ct.SignedCertificateTimestamp parseSCTFromBinary(InputStream inputStream) {
-    Ct.SignedCertificateTimestamp.Builder sctBuilder = Ct.SignedCertificateTimestamp.newBuilder();
-
+  public static SignedCertificateTimestamp parseSCTFromBinary(InputStream inputStream) {
     int version = (int) readNumber(inputStream, 1 /* single byte */);
     if (version != Ct.Version.V1.getNumber()) {
       throw new SerializationException(String.format("Unknown version: %d", version));
     }
-    sctBuilder.setVersion(Ct.Version.valueOf(version));
+    SignedCertificateTimestamp sct = new SignedCertificateTimestamp(Ct.Version.valueOf(version));
 
     byte[] keyId = readFixedLength(inputStream, CTConstants.KEY_ID_LENGTH);
-    sctBuilder.setId(Ct.LogID.newBuilder().setKeyId(ByteString.copyFrom(keyId)).build());
+    sct.id = Ct.LogID.newBuilder().setKeyId(ByteString.copyFrom(keyId)).build();
 
-    long timestamp = readNumber(inputStream, CTConstants.TIMESTAMP_LENGTH);
-    sctBuilder.setTimestamp(timestamp);
+    sct.timestamp = readNumber(inputStream, CTConstants.TIMESTAMP_LENGTH);
+    sct.extensions = readVariableLength(inputStream, CTConstants.MAX_EXTENSIONS_LENGTH);
+    sct.signature = parseDigitallySignedFromBinary(inputStream);
 
-    byte[] extensions = readVariableLength(inputStream, CTConstants.MAX_EXTENSIONS_LENGTH);
-    sctBuilder.setExtensions(ByteString.copyFrom(extensions));
-
-    sctBuilder.setSignature(parseDigitallySignedFromBinary(inputStream));
-    return sctBuilder.build();
+    return sct;
   }
 
   /**

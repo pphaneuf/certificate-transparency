@@ -1,6 +1,7 @@
 package org.certificatetransparency.ctlog.serialization;
 
 import com.google.common.base.Preconditions;
+import org.certificatetransparency.ctlog.SignedCertificateTimestamp;
 import org.certificatetransparency.ctlog.proto.Ct;
 
 import java.io.ByteArrayOutputStream;
@@ -63,21 +64,21 @@ public class Serializer {
     }
   }
 
-  public static byte[] serializeSctToBinary(Ct.SignedCertificateTimestamp sct) {
+  public static byte[] serializeSctToBinary(SignedCertificateTimestamp sct) {
     ByteArrayOutputStream bos = new ByteArrayOutputStream();
-    if (sct.getVersion() != Ct.Version.V1) {
-      throw new SerializationException("Cannot serialize unknown SCT version: " + sct.getVersion());
+    if (sct.version != Ct.Version.V1) {
+      throw new SerializationException("Cannot serialize unknown SCT version: " + sct.version);
     }
-    writeUint(bos, sct.getVersion().getNumber(), CTConstants.VERSION_LENGTH);
-    writeFixedBytes(bos, sct.getId().getKeyId().toByteArray());
-    writeUint(bos, sct.getTimestamp(), CTConstants.TIMESTAMP_LENGTH);
-    writeVariableLength(bos, sct.getExtensions().toByteArray(), CTConstants.MAX_EXTENSIONS_LENGTH);
+    writeUint(bos, sct.version.getNumber(), CTConstants.VERSION_LENGTH);
+    writeFixedBytes(bos, sct.id.getKeyId().toByteArray());
+    writeUint(bos, sct.timestamp, CTConstants.TIMESTAMP_LENGTH);
+    writeVariableLength(bos, sct.extensions, CTConstants.MAX_EXTENSIONS_LENGTH);
     writeUint(bos,
-        sct.getSignature().getHashAlgorithm().getNumber(), CTConstants.HASH_ALG_LENGTH);
+        sct.signature.getHashAlgorithm().getNumber(), CTConstants.HASH_ALG_LENGTH);
     writeUint(bos,
-        sct.getSignature().getSigAlgorithm().getNumber(), CTConstants.SIGNATURE_ALG_LENGTH);
+        sct.signature.getSigAlgorithm().getNumber(), CTConstants.SIGNATURE_ALG_LENGTH);
     writeVariableLength(bos,
-        sct.getSignature().getSignature().toByteArray(), CTConstants.MAX_SIGNATURE_LENGTH);
+        sct.signature.getSignature().toByteArray(), CTConstants.MAX_SIGNATURE_LENGTH);
 
     return bos.toByteArray();
   }

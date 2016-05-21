@@ -4,7 +4,7 @@ import com.google.common.io.Files;
 import com.google.protobuf.InvalidProtocolBufferException;
 import org.certificatetransparency.ctlog.LogInfo;
 import org.certificatetransparency.ctlog.LogSignatureVerifier;
-import org.certificatetransparency.ctlog.proto.Ct;
+import org.certificatetransparency.ctlog.SignedCertificateTimestamp;
 import org.certificatetransparency.ctlog.serialization.CryptoDataLoader;
 import org.certificatetransparency.ctlog.serialization.Deserializer;
 
@@ -32,13 +32,7 @@ public class VerifySignature {
     List<Certificate> certs = CryptoDataLoader.certificatesFromFile(new File(pemFile));
     byte[] sctBytes = Files.toByteArray(new File(sctFile));
 
-    Ct.SignedCertificateTimestamp sct;
-    try {
-      sct = Ct.SignedCertificateTimestamp.parseFrom(sctBytes);
-    } catch (InvalidProtocolBufferException e) {
-      System.out.println("Not a protocol buffer. Trying reading as binary");
-      sct = Deserializer.parseSCTFromBinary(new ByteArrayInputStream(sctBytes));
-    }
+    SignedCertificateTimestamp sct = Deserializer.parseSCTFromBinary(new ByteArrayInputStream(sctBytes));
 
     System.out.println("Canned SCT: " + sct.toString());
 

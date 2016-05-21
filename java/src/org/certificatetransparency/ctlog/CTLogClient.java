@@ -1,6 +1,7 @@
 package org.certificatetransparency.ctlog;
 
 import com.google.common.io.Files;
+import org.certificatetransparency.ctlog.SignedCertificateTimestamp;
 import org.certificatetransparency.ctlog.comm.HttpLogClient;
 import org.certificatetransparency.ctlog.proto.Ct;
 import org.certificatetransparency.ctlog.serialization.CryptoDataLoader;
@@ -23,10 +24,10 @@ public class CTLogClient {
    * Result of the certificate upload. Contains the SCT and verification result.
    */
   public static class UploadResult {
-    private final Ct.SignedCertificateTimestamp sct;
+    private final SignedCertificateTimestamp sct;
     private final boolean verified;
 
-    public UploadResult(Ct.SignedCertificateTimestamp sct, boolean verified) {
+    public UploadResult(SignedCertificateTimestamp sct, boolean verified) {
       this.sct = sct;
       this.verified = verified;
     }
@@ -35,7 +36,7 @@ public class CTLogClient {
       return verified;
     }
 
-    public final Ct.SignedCertificateTimestamp getSct() {
+    public final SignedCertificateTimestamp getSct() {
       return sct;
     }
   }
@@ -46,7 +47,7 @@ public class CTLogClient {
   }
 
   public UploadResult uploadCertificatesChain(List<Certificate> chain) {
-    Ct.SignedCertificateTimestamp sct = httpClient.addCertificate(chain);
+    SignedCertificateTimestamp sct = httpClient.addCertificate(chain);
     return new UploadResult(sct, signatureVerifier.verifySignature(sct, chain.get(0)));
   }
 

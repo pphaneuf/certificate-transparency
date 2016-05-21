@@ -47,12 +47,3 @@ message LogID {
   // 32 bytes
   optional bytes key_id = 1;
 }
-
-message SignedCertificateTimestamp {
-  optional Version version = 1 [ default = UNKNOWN_VERSION ];
-  optional LogID id = 2;
-  // UTC time in milliseconds, since January 1, 1970, 00:00.
-  optional uint64 timestamp = 3;
-  optional DigitallySigned signature = 4;
-  optional bytes extensions = 5;
-}

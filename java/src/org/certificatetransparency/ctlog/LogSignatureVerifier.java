@@ -15,6 +15,7 @@ import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.asn1.x509.Extensions;
 import org.bouncycastle.asn1.x509.TBSCertificate;
 import org.bouncycastle.asn1.x509.V3TBSCertificateGenerator;
+import org.certificatetransparency.ctlog.SignedCertificateTimestamp;
 import org.certificatetransparency.ctlog.proto.Ct;
 import org.certificatetransparency.ctlog.serialization.CTConstants;
 import org.certificatetransparency.ctlog.serialization.Serializer;
@@ -130,10 +131,10 @@ public class LogSignatureVerifier {
    * @param chain The certificates chain as sent to the log.
    * @return true if the log's signature over this SCT can be verified, false otherwise.
    */
-  public boolean verifySignature(Ct.SignedCertificateTimestamp sct, List<Certificate> chain) {
-    if (!logInfo.isSameLogId(sct.getId().getKeyId().toByteArray())) {
+  public boolean verifySignature(SignedCertificateTimestamp sct, List<Certificate> chain) {
+    if (!logInfo.isSameLogId(sct.id.getKeyId().toByteArray())) {
       throw new CertificateTransparencyException(String.format(
-          "Log ID of SCT (%s) does not match this log's ID.", sct.getId().getKeyId()));
+          "Log ID of SCT (%s) does not match this log's ID.", sct.id.getKeyId()));
     }
 
     X509Certificate leafCert = (X509Certificate) chain.get(0);
@@ -164,10 +165,10 @@ public class LogSignatureVerifier {
    * @param leafCert leaf certificate sent to the log.
    * @return true if the log's signature over this SCT can be verified, false otherwise.
    */
-  boolean verifySignature(Ct.SignedCertificateTimestamp sct, Certificate leafCert) {
-    if (!logInfo.isSameLogId(sct.getId().getKeyId().toByteArray())) {
+  boolean verifySignature(SignedCertificateTimestamp sct, Certificate leafCert) {
+    if (!logInfo.isSameLogId(sct.id.getKeyId().toByteArray())) {
       throw new CertificateTransparencyException(String.format(
-          "Log ID of SCT (%s) does not match this log's ID.", sct.getId().getKeyId()));
+          "Log ID of SCT (%s) does not match this log's ID.", sct.id.getKeyId()));
     }
     byte[] toVerify = serializeSignedSCTData(leafCert, sct);
 
@@ -184,7 +185,7 @@ public class LogSignatureVerifier {
    *                   the issuerInfo contains data on the final CA certificate used for signing.
    * @return true if the SCT verifies, false otherwise.
    */
-  boolean verifySCTOverPreCertificate(Ct.SignedCertificateTimestamp sct,
+  boolean verifySCTOverPreCertificate(SignedCertificateTimestamp sct,
                                       X509Certificate preCertificate,
                                       IssuerInformation issuerInfo) {
     Preconditions.checkNotNull(issuerInfo, "At the very least, the issuer key hash is needed.");
@@ -285,7 +286,7 @@ public class LogSignatureVerifier {
     return outputExtensions;
   }
 
-  private boolean verifySCTSignatureOverBytes(Ct.SignedCertificateTimestamp sct, byte[] toVerify) {
+  private boolean verifySCTSignatureOverBytes(SignedCertificateTimestamp sct, byte[] toVerify) {
     if (!logInfo.getSignatureAlgorithm().equals("EC")) {
       throw new CertificateTransparencyException(
           String.format("Non-EC signature %s not supported yet",
@@ -296,7 +297,7 @@ public class LogSignatureVerifier {
       Signature signature = Signature.getInstance("SHA256withECDSA");
       signature.initVerify(logInfo.getKey());
       signature.update(toVerify);
-      return signature.verify(sct.getSignature().getSignature().toByteArray());
+      return signature.verify(sct.signature.getSignature().toByteArray());
     } catch (SignatureException e) {
       throw new CertificateTransparencyException("Signature object not properly initialized or"
           + " signature from SCT is improperly encoded.", e);
@@ -309,7 +310,7 @@ public class LogSignatureVerifier {
   }
 
   static byte[] serializeSignedSCTData(Certificate certificate,
-                                       Ct.SignedCertificateTimestamp sct) {
+                                       SignedCertificateTimestamp sct) {
     ByteArrayOutputStream bos = new ByteArrayOutputStream();
     serializeCommonSCTFields(sct, bos);
     Serializer.writeUint(bos, Ct.LogEntryType.X509_ENTRY_VALUE, LOG_ENTRY_TYPE_LENGTH);
@@ -318,21 +319,20 @@ public class LogSignatureVerifier {
     } catch (CertificateEncodingException e) {
       throw new CertificateTransparencyException("Error encoding certificate", e);
     }
-    Serializer.writeVariableLength(bos, sct.getExtensions().toByteArray(),
-        MAX_EXTENSIONS_LENGTH);
+    Serializer.writeVariableLength(bos, sct.extensions, MAX_EXTENSIONS_LENGTH);
 
     return bos.toByteArray();
   }
 
   static byte[] serializeSignedSCTDataForPreCertificate(byte[] preCertBytes,
                                                         byte[] issuerKeyHash,
-                                                        Ct.SignedCertificateTimestamp sct) {
+                                                        SignedCertificateTimestamp sct) {
     ByteArrayOutputStream bos = new ByteArrayOutputStream();
     serializeCommonSCTFields(sct, bos);
     Serializer.writeUint(bos, Ct.LogEntryType.PRECERT_ENTRY_VALUE, LOG_ENTRY_TYPE_LENGTH);
     Serializer.writeFixedBytes(bos, issuerKeyHash);
     Serializer.writeVariableLength(bos, preCertBytes, MAX_CERTIFICATE_LENGTH);
-    Serializer.writeVariableLength(bos, sct.getExtensions().toByteArray(), MAX_EXTENSIONS_LENGTH);
+    Serializer.writeVariableLength(bos, sct.extensions, MAX_EXTENSIONS_LENGTH);
     return bos.toByteArray();
   }
 
@@ -346,11 +346,11 @@ public class LogSignatureVerifier {
   }
 
   private static void serializeCommonSCTFields(
-      Ct.SignedCertificateTimestamp sct, ByteArrayOutputStream bos) {
-    Preconditions.checkArgument(sct.getVersion().equals(Ct.Version.V1),
+      SignedCertificateTimestamp sct, ByteArrayOutputStream bos) {
+    Preconditions.checkArgument(sct.version.equals(Ct.Version.V1),
         "Can only serialize SCT v1 for now.");
-    Serializer.writeUint(bos, sct.getVersion().getNumber(), VERSION_LENGTH); // ct::V1
+    Serializer.writeUint(bos, sct.version.getNumber(), VERSION_LENGTH); // ct::V1
     Serializer.writeUint(bos, 0, 1); // ct::CERTIFICATE_TIMESTAMP
-    Serializer.writeUint(bos, sct.getTimestamp(), TIMESTAMP_LENGTH); // Timestamp
+    Serializer.writeUint(bos, sct.timestamp, TIMESTAMP_LENGTH); // Timestamp
   }
 }

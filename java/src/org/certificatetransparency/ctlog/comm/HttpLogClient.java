@@ -15,6 +15,7 @@ import org.certificatetransparency.ctlog.CertificateInfo;
 import org.certificatetransparency.ctlog.CertificateTransparencyException;
 import org.certificatetransparency.ctlog.ParsedLogEntry;
 import org.certificatetransparency.ctlog.ParsedLogEntryWithProof;
+import org.certificatetransparency.ctlog.SignedCertificateTimestamp;
 import org.certificatetransparency.ctlog.SignedTreeHead;
 import org.certificatetransparency.ctlog.proto.Ct;
 import org.certificatetransparency.ctlog.serialization.Deserializer;
@@ -88,14 +89,12 @@ public class HttpLogClient {
    * @param responseBody Response string to parse.
    * @return SCT filled from the JSON input.
    */
-  static Ct.SignedCertificateTimestamp parseServerResponse(String responseBody) {
+  static SignedCertificateTimestamp parseServerResponse(String responseBody) {
     if (responseBody == null) {
       return null;
     }
 
     JSONObject parsedResponse = (JSONObject) JSONValue.parse(responseBody);
-    Ct.SignedCertificateTimestamp.Builder builder =
-        Ct.SignedCertificateTimestamp.newBuilder();
 
     int numericVersion = ((Number) parsedResponse.get("sct_version")).intValue();
     Ct.Version version = Ct.Version.valueOf(numericVersion);
@@ -103,22 +102,21 @@ public class HttpLogClient {
       throw new IllegalArgumentException(String.format("Input JSON has an invalid version: %d",
           numericVersion));
     }
-    builder.setVersion(version);
+    SignedCertificateTimestamp sct = new SignedCertificateTimestamp(version);
     Ct.LogID.Builder logIdBuilder = Ct.LogID.newBuilder();
     logIdBuilder.setKeyId(
         ByteString.copyFrom(Base64.decodeBase64((String) parsedResponse.get("id"))));
-    builder.setId(logIdBuilder.build());
-    builder.setTimestamp(((Number) parsedResponse.get("timestamp")).longValue());
+    sct.id = logIdBuilder.build();
+    sct.timestamp = ((Number) parsedResponse.get("timestamp")).longValue();
     String extensions = (String) parsedResponse.get("extensions");
     if (!extensions.isEmpty()) {
-      builder.setExtensions(ByteString.copyFrom(Base64.decodeBase64(extensions)));
+      sct.extensions = Base64.decodeBase64(extensions);
     }
 
     String base64Signature = (String) parsedResponse.get("signature");
-    builder.setSignature(
-        Deserializer.parseDigitallySignedFromBinary(
-            new ByteArrayInputStream(Base64.decodeBase64(base64Signature))));
-    return builder.build();
+    sct.signature = Deserializer.parseDigitallySignedFromBinary(
+        new ByteArrayInputStream(Base64.decodeBase64(base64Signature)));
+    return sct;
   }
 
   /**
@@ -126,7 +124,7 @@ public class HttpLogClient {
    * @param certificatesChain The certificate chain to add.
    * @return SignedCertificateTimestamp if the log added the chain successfully.
    */
-  public Ct.SignedCertificateTimestamp addCertificate(List<Certificate> certificatesChain) {
+  public SignedCertificateTimestamp addCertificate(List<Certificate> certificatesChain) {
     Preconditions.checkArgument(!certificatesChain.isEmpty(),
         "Must have at least one certificate to submit.");
 
@@ -142,7 +140,7 @@ public class HttpLogClient {
     return addCertificate(certificatesChain, isPreCertificate);
   }
 
-  private Ct.SignedCertificateTimestamp addCertificate(
+  private SignedCertificateTimestamp addCertificate(
       List<Certificate> certificatesChain, boolean isPreCertificate) {
     String jsonPayload = encodeCertificates(certificatesChain).toJSONString();
     String methodPath;
