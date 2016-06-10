@@ -1,6 +1,7 @@
 package org.certificatetransparency.ctlog.utils;
 
 import com.google.common.io.Files;
+import org.certificatetransparency.ctlog.SignedCertificateTimestamp;
 import org.certificatetransparency.ctlog.comm.HttpLogClient;
 import org.certificatetransparency.ctlog.proto.Ct;
 import org.certificatetransparency.ctlog.serialization.CryptoDataLoader;
@@ -35,13 +36,13 @@ public class UploadCertificate {
 
     HttpLogClient client = new HttpLogClient("http://ct.googleapis.com/pilot/ct/v1/");
 
-    Ct.SignedCertificateTimestamp resp = client.addCertificate(certs);
+    SignedCertificateTimestamp resp = client.addCertificate(certs);
 
     System.out.println(resp);
     if (args.length >= 2) {
       String outputFile = args[1];
-      //TODO(eranm): Binary encoding compatible with the C++ code.
-      Files.write(resp.toByteArray(), new File(outputFile));
+      // TODO(eranm): Binary encoding compatible with the C++ code.
+      //Files.write(resp.toByteArray(), new File(outputFile));
     }
   }
 }
